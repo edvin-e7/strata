@@ -14,7 +14,16 @@ type Table struct {
 func NewTable() *Table { return &Table{cols: map[string]*Int64Column{}} }
 
 // AddInt64 attaches a named column (insertion order preserved for the schema).
+// All columns must be equal length: a ragged table is a caller error and panics
+// HERE, at construction, rather than risking an out-of-range panic at query time on
+// a filter→sum across mismatched columns. That keeps Execute's "never a crash on
+// validated input" contract honest. (Found by adversarial review 2026-06-04.)
 func (t *Table) AddInt64(name string, c *Int64Column) *Table {
+	if len(t.order) > 0 {
+		if rows := t.rows(); c.Len() != rows {
+			panic(fmt.Sprintf("strata: column %q has %d rows but the table has %d — all columns must be equal length", name, c.Len(), rows))
+		}
+	}
 	if _, ok := t.cols[name]; !ok {
 		t.order = append(t.order, name)
 	}
@@ -23,8 +32,9 @@ func (t *Table) AddInt64(name string, c *Int64Column) *Table {
 }
 
 // Schema returns column names in insertion order — handed to the planner so the
-// model can only reference columns that actually exist.
-func (t *Table) Schema() []string { return t.order }
+// model can only reference columns that actually exist. A defensive copy, so a
+// caller can't reorder the table's internal schema through the returned slice.
+func (t *Table) Schema() []string { return append([]string(nil), t.order...) }
 
 func (t *Table) rows() int {
 	for _, name := range t.order {

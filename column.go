@@ -39,7 +39,9 @@ func (c *Int64Column) FilterGT(threshold int64) Selection {
 	return sel
 }
 
-// Sum aggregates the whole column.
+// Sum aggregates the whole column. Caveat (honest): like any naive int64 aggregate
+// it can overflow and wrap silently past 2^63 — documented, not yet guarded. A
+// widening/saturating accumulator is on the roadmap.
 func (c *Int64Column) Sum() int64 {
 	var total int64
 	for _, v := range c.Data {

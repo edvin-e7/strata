@@ -45,6 +45,20 @@ func TestExecuteRejectsHallucination(t *testing.T) {
 	}
 }
 
+// Locks the HIGH-severity fix from adversarial review: a ragged table (mismatched
+// column lengths) must be rejected at construction, so a filter→sum can never panic
+// out-of-bounds on validated input.
+func TestAddInt64RejectsRaggedColumns(t *testing.T) {
+	defer func() {
+		if recover() == nil {
+			t.Fatal("expected panic when adding a column of a different length")
+		}
+	}()
+	NewTable().
+		AddInt64("a", NewInt64Column([]int64{1, 2, 3})).
+		AddInt64("b", NewInt64Column([]int64{1, 2})) // shorter → must panic
+}
+
 // Live, guarded: actually talk to gemma-e7 if Ollama is up, and assert the
 // English answer matches the deterministic ground truth. Skips cleanly when Ollama
 // isn't reachable, so this never makes CI flaky.

@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"strings"
 )
@@ -70,8 +71,15 @@ func (p *OllamaPlanner) Plan(ctx context.Context, question string, schema []stri
 		return Query{}, fmt.Errorf("ollama unreachable: %w", err)
 	}
 	defer resp.Body.Close()
+	// A non-200 (e.g. 404 = model not pulled) decodes to an empty Content otherwise,
+	// masking the real cause behind a confusing "unparseable query". Surface it.
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
+		return Query{}, fmt.Errorf("ollama returned HTTP %d: %s", resp.StatusCode, strings.TrimSpace(string(body)))
+	}
 	var cr ollamaChatResp
-	if err := json.NewDecoder(resp.Body).Decode(&cr); err != nil {
+	// Bound the body so a runaway/hostile local endpoint can't make us allocate without limit.
+	if err := json.NewDecoder(io.LimitReader(resp.Body, 1<<20)).Decode(&cr); err != nil {
 		return Query{}, err
 	}
 	q, err := parseQueryJSON(cr.Message.Content)
@@ -81,16 +89,18 @@ func (p *OllamaPlanner) Plan(ctx context.Context, question string, schema []stri
 	return q, nil
 }
 
-// parseQueryJSON extracts the first {...} object (models sometimes add prose or
-// fences despite instructions) and unmarshals it.
+// parseQueryJSON extracts the first complete JSON object (models sometimes add
+// prose or fences despite instructions) and unmarshals it. Uses a brace-depth scan
+// that respects string literals — robust by construction. The old first-'{'..last-'}'
+// heuristic broke when prose adjacent to the JSON contained a stray brace (found by
+// adversarial review 2026-06-04).
 func parseQueryJSON(s string) (Query, error) {
-	start := strings.IndexByte(s, '{')
-	end := strings.LastIndexByte(s, '}')
-	if start < 0 || end < start {
+	obj, ok := extractJSONObject(s)
+	if !ok {
 		return Query{}, fmt.Errorf("no JSON object in %q", s)
 	}
 	var q Query
-	if err := json.Unmarshal([]byte(s[start:end+1]), &q); err != nil {
+	if err := json.Unmarshal([]byte(obj), &q); err != nil {
 		return Query{}, err
 	}
 	// Be liberal in what we accept: small local models reach for familiar operator
@@ -100,6 +110,39 @@ func parseQueryJSON(s string) (Query, error) {
 		q.Filter.Op = normalizeOp(q.Filter.Op)
 	}
 	return q, nil
+}
+
+// extractJSONObject returns the first balanced {...} object in s, tracking string
+// literals (and escapes) so a brace inside a string value doesn't end it early, and
+// prose after the object is ignored.
+func extractJSONObject(s string) (string, bool) {
+	start := strings.IndexByte(s, '{')
+	if start < 0 {
+		return "", false
+	}
+	depth, inStr, esc := 0, false, false
+	for i := start; i < len(s); i++ {
+		switch c := s[i]; {
+		case inStr && esc:
+			esc = false
+		case inStr && c == '\\':
+			esc = true
+		case inStr && c == '"':
+			inStr = false
+		case inStr:
+			// any other byte inside a string literal
+		case c == '"':
+			inStr = true
+		case c == '{':
+			depth++
+		case c == '}':
+			depth--
+			if depth == 0 {
+				return s[start : i+1], true
+			}
+		}
+	}
+	return "", false
 }
 
 func normalizeOp(op string) string {

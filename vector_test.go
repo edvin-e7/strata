@@ -1,6 +1,7 @@
 package strata
 
 import (
+	"math"
 	"math/rand"
 	"testing"
 )
@@ -26,6 +27,32 @@ func TestTopKCosine(t *testing.T) {
 	}
 	if got[1].Row != 2 || abs32(got[1].Score-0.70710677) > 1e-5 {
 		t.Fatalf("top[1] = %+v, want row 2 score ~0.707", got[1])
+	}
+}
+
+// A row carrying a NaN (or Inf) embedding value yields a non-finite cosine score.
+// NaN compares false against everything, so insertTopK would wedge it in at an
+// arbitrary slot — it must be skipped entirely instead. query [1,0] vs rows:
+// [1,0]→1.0, [NaN,0]→NaN (must be dropped), [1,1]→~0.707. top-3 may only hold the
+// two finite rows (0 and 2), never the NaN row 1, and no returned score is NaN/Inf.
+func TestTopKCosineSkipsNaN(t *testing.T) {
+	nan := float32(math.NaN())
+	v := NewVectorColumn(2, []float32{1, 0, nan, 0, 1, 1})
+	got := v.TopKCosine([]float32{1, 0}, 3)
+	if len(got) != 2 {
+		t.Fatalf("len = %d, want 2 (NaN row must be dropped) (%+v)", len(got), got)
+	}
+	for _, n := range got {
+		if n.Row == 1 {
+			t.Fatalf("NaN row 1 landed in top-k: %+v", got)
+		}
+		s := float64(n.Score)
+		if math.IsNaN(s) || math.IsInf(s, 0) {
+			t.Fatalf("non-finite score in top-k: %+v", n)
+		}
+	}
+	if got[0].Row != 0 || got[1].Row != 2 {
+		t.Fatalf("ranking = %+v, want rows [0 2]", got)
 	}
 }
 

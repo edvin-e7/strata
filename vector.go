@@ -41,6 +41,10 @@ type Neighbor struct {
 // TopKCosine returns the k rows most cosine-similar to query, sorted best-first.
 // One tight pass over the contiguous data computes each row's dot product and norm;
 // a bounded insertion keeps only the running top-k. No GPU, no external vector DB.
+//
+// Rows whose score comes out NaN or ±Inf (a NaN/Inf embedding value, or a query that
+// drives the cosine non-finite) are skipped: NaN compares false against everything, so
+// letting one into insertTopK would wedge it into the top-k at an arbitrary position.
 func (v *VectorColumn) TopKCosine(query []float32, k int) []Neighbor {
 	if k <= 0 || v.NumRows() == 0 || len(query) != v.Dim {
 		return nil
@@ -67,7 +71,11 @@ func (v *VectorColumn) TopKCosine(query []float32, k int) []Neighbor {
 		if rNorm == 0 {
 			continue
 		}
-		top = insertTopK(top, Neighbor{Row: uint32(i), Score: float32(dot / (qNorm * rNorm))}, k)
+		score := dot / (qNorm * rNorm)
+		if math.IsNaN(score) || math.IsInf(score, 0) {
+			continue // a NaN/Inf score would sort arbitrarily into the top-k
+		}
+		top = insertTopK(top, Neighbor{Row: uint32(i), Score: float32(score)}, k)
 	}
 	return top
 }

@@ -89,11 +89,11 @@ func (p *OllamaPlanner) Plan(ctx context.Context, question string, schema []stri
 	return q, nil
 }
 
-// parseQueryJSON extracts the first complete JSON object (models sometimes add
-// prose or fences despite instructions) and unmarshals it. Uses a brace-depth scan
-// that respects string literals — robust by construction. The old first-'{'..last-'}'
-// heuristic broke when prose adjacent to the JSON contained a stray brace (found by
-// adversarial review 2026-06-04).
+// parseQueryJSON extracts the first JSON object that looks like a Query (models
+// sometimes add prose or fences despite instructions) and unmarshals it. Uses a
+// brace-depth scan that respects string literals — robust by construction. The old
+// first-'{'..last-'}' heuristic broke when prose adjacent to the JSON contained a
+// stray brace (found by adversarial review 2026-06-04).
 func parseQueryJSON(s string) (Query, error) {
 	obj, ok := extractJSONObject(s)
 	if !ok {
@@ -112,14 +112,41 @@ func parseQueryJSON(s string) (Query, error) {
 	return q, nil
 }
 
-// extractJSONObject returns the first balanced {...} object in s, tracking string
-// literals (and escapes) so a brace inside a string value doesn't end it early, and
-// prose after the object is ignored.
+// extractJSONObject returns the first balanced {...} object in s that is a Query —
+// i.e. it unmarshals as JSON AND carries the required "agg" key. We can't just take
+// the first balanced object: a chatty model emits stray braces in prose before the
+// real JSON ("Here's the query for {each flag}: {...}"), or a leading "{}" that
+// unmarshals into a ZERO Query and silently buries the real one. So we walk every
+// candidate '{'-start and keep the first one that actually looks like a Query. Brace
+// scanning stays string-literal/escape-aware so a brace inside a value doesn't end an
+// object early (found by adversarial review 2026-06-04).
 func extractJSONObject(s string) (string, bool) {
-	start := strings.IndexByte(s, '{')
-	if start < 0 {
-		return "", false
+	for start := strings.IndexByte(s, '{'); start >= 0; start = nextBrace(s, start) {
+		obj, ok := scanBalanced(s, start)
+		if !ok {
+			break // an unterminated object means no later '{' can balance either
+		}
+		if isQueryObject(obj) {
+			return obj, true
+		}
+		// candidate rejected; nextBrace advances to the next '{' start
 	}
+	return "", false
+}
+
+// nextBrace returns the index of the first '{' strictly after from, or -1.
+func nextBrace(s string, from int) int {
+	rel := strings.IndexByte(s[from+1:], '{')
+	if rel < 0 {
+		return -1
+	}
+	return from + 1 + rel
+}
+
+// scanBalanced returns the balanced {...} object beginning at start (which must point
+// at a '{'), tracking string literals (and escapes) so a brace inside a string value
+// doesn't end the object early.
+func scanBalanced(s string, start int) (obj string, ok bool) {
 	depth, inStr, esc := 0, false, false
 	for i := start; i < len(s); i++ {
 		switch c := s[i]; {
@@ -143,6 +170,18 @@ func extractJSONObject(s string) (string, bool) {
 		}
 	}
 	return "", false
+}
+
+// isQueryObject reports whether obj is valid JSON carrying the Query's required "agg"
+// key — the discriminator that tells the real plan apart from incidental braces ("{}",
+// "{each flag}") a verbose model may emit alongside it.
+func isQueryObject(obj string) bool {
+	var m map[string]json.RawMessage
+	if err := json.Unmarshal([]byte(obj), &m); err != nil {
+		return false
+	}
+	_, ok := m["agg"]
+	return ok
 }
 
 func normalizeOp(op string) string {

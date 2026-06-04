@@ -13,6 +13,11 @@ func TestParseQueryJSON(t *testing.T) {
 		{"leading fence", "```json\n{\"agg\":\"sum\",\"column\":\"amount\"}\n```", Query{Agg: "sum", Column: "amount"}},
 		{"brace inside string value", `{"agg":"sum","column":"am}ount"}`, Query{Agg: "sum", Column: "am}ount"}},
 		{"op dialect normalized", `{"agg":"count","filter":{"column":"x","op":"$gt","value":5}}`, Query{Agg: "count", Filter: &Predicate{"x", ">", 5}}},
+		// Chatty model emits a stray brace in prose BEFORE the real JSON. The first
+		// balanced object ("{each flag}") isn't a Query — recover the real one.
+		{"stray prose brace before object", `Sure! Here's the query for {each flag}: {"agg":"sum","column":"amount"}`, Query{Agg: "sum", Column: "amount"}},
+		// Leading "{}" unmarshals cleanly into a ZERO Query; must NOT swallow the real one.
+		{"leading empty object before real one", `Result {}: {"agg":"count","column":""}`, Query{Agg: "count"}},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {

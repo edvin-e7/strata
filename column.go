@@ -80,6 +80,10 @@ type GroupResult struct {
 // not radix-partitioned or SIMD (honest about that, like every op here). Results are
 // sorted by key ascending: Go randomizes map iteration order, and a non-deterministic
 // engine result is a correctness bug, not a cosmetic one, so the order is pinned.
+//
+// Caveat (honest): the per-group int64 accumulator can overflow and wrap silently
+// past 2^63, exactly like Sum — documented, not yet guarded. A widening/saturating
+// accumulator is on the roadmap.
 func GroupSum(keys, values *Int64Column, sel Selection) []GroupResult {
 	if len(keys.Data) != len(values.Data) {
 		panic(fmt.Sprintf("strata: GroupSum key column has %d rows but value column has %d — must match", len(keys.Data), len(values.Data)))

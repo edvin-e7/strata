@@ -26,6 +26,10 @@ go test -bench=. -benchmem         # honest numbers
 - **Group-by + aggregate**: hash-aggregation flowing the selection vector straight
   through (filter→group-by→sum, no intermediate), deterministic key-sorted output —
   **10M rows / 1000 groups in ~65 ms**.
+- **Hash-join**: vectorized inner equi-join (build/probe, O(L+R)) whose result is a
+  pair of selection vectors — index pairs that compose straight back into the other
+  ops, so no joined-row table is ever materialized — deterministic order, filter→join
+  flows through. **10M-row fact ⋈ 1000-row dimension in ~76 ms**.
 - `VectorColumn`: cosine top-k **semantic search** as a native column operation.
 - **Local NL→query**: a local LLM (Ollama/gemma-e7) proposes a validated query plan;
   the engine validates and runs it — a hallucinated column or op errors, never runs.

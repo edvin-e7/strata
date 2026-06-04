@@ -87,3 +87,16 @@ bandwidth at this scale. Every number ships with the command that reproduces it.
    wins ~6×), branch-vs-bandwidth experiment, disassembly evidence (`CSEL` vs `BLE`),
    and the full operator-cost table — reporting the rows where the number went the
    wrong way, which is the senior signal.
+7. ✅ Vectorized hash-join (`join.go`): the last MVP operator blocks 1–6 left unbuilt.
+   Inner equi-join on int64 keys, two-phase build/probe (O(L+R), not O(L·R)). The
+   result is `JoinResult{Left, Right}` — two parallel selection vectors, never a
+   materialized joined-row table, so it composes straight into the existing ops
+   (`amount.SumAt(jr.Left)`). filter→join flows selections through both sides;
+   output order is deterministic (probe-then-build index order — the map is never
+   iterated for output, so map randomization can't leak in, no post-sort). Table-level
+   `Join` inherits the validate-everything contract (unknown key → clean error, never
+   a crash). Honest 10M-fact ⋈ 1000-dim bench (~76 ms; the cost is dominated by
+   materializing the two ~10M output index vectors, not the probe). Build side is the
+   right input by design — choosing it from cardinality is cost-based planning, a
+   non-goal. **Remaining MVP operator: `sort`/order-by (top-N over a selection
+   vector) — still unbuilt; the operator line above is honest about that.**

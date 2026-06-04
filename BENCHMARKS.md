@@ -127,6 +127,7 @@ explicit non-goals).
 |---|---|---:|---:|
 | `SumWhereGT` (fused filter→sum) | 10M int64 | 6.3 ms (≈1.6B rows/s) | 0 |
 | `GroupSum` (hash group-by + sum) | 10M rows, ~1000 keys | 64.8 ms | 90 KB, 24 |
+| `HashJoinInt64` (inner equi-join) | 10M fact ⋈ 1000 dim | 75.8 ms | 80 MB, ~1k |
 | `FilterGT`→`SumAt` (float64, two-pass) | 10M float64 | 50.8 ms | 40 MB, 1 |
 | `CountTrue` (bit-packed popcount) | 10M bits (~1.25 MB) | 69 µs | 0 |
 | `FilterEq` (dictionary-encoded string) | 10M rows, ~100 cats | 7.2 ms | 2 MB, 26 |
@@ -141,6 +142,14 @@ Notes, honestly:
 - **`GroupSum` (64.8 ms) is the slowest op**, dominated by Go map operations on ~1000
   keys (hashing + probing per row). A real engine radix-partitions or uses open
   addressing; strata uses the standard library map. Honest, and a clear next target.
+- **`HashJoinInt64` (75.8 ms, 80 MB)** is a star-join: a 10M-row fact table joined to a
+  1000-row dimension, each fact row matching one dimension row. The honest read of that
+  80 MB is that it is **not** the hash table (the 1000-row build side is tiny) — it is
+  the *output*: two ~10M-element `uint32` selection vectors (≈40 MB each), the matched
+  index pairs. That is inherent to a join that returns 10M pairs, not engine waste; a
+  consumer that only aggregates the result (`SumAt(jr.Left)`) could fuse probe+aggregate
+  to avoid materializing it, the same fusion lesson as `SumWhereGT`. The build/probe
+  itself is the cheap part. Same `map`-based caveat as `GroupSum` for the build phase.
 - **`TopKCosine` (11.4 ms for 100k×128)** is the AI-native differentiator — semantic
   search as a native column op, no GPU, no external vector DB — and it's a single
   contiguous pass with a bounded top-k, 80 bytes allocated total.

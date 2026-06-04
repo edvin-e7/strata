@@ -68,7 +68,13 @@ with the command that reproduces it.
 ## Roadmap (blocks)
 
 1. ✅ Vectorized columnar core seed: Int64 column, filter→aggregate, honest 10M bench.
-2. Column types (float64, dict-string, bool) + a tiny typed table.
+2. ✅ Column types (float64, dict-string, bool) + a tiny typed table (`typed.go`):
+   float64 (NaN-correct filter), bit-packed bool (popcount count + set-bit iteration),
+   dictionary-encoded string (group/filter on int codes, decode only at the edges), and
+   a `TypedTable` that stores them behind a typed schema and validates column type as
+   well as existence before any op. Keystone cross-type op: `GroupSumFloat`
+   (revenue-by-region) over the selection vector. The NL planner still drives the
+   int64 `Table`; migrating it onto `TypedTable` is folded into block 6's write-up.
 3. ✅ Group-by + aggregate, vectorized: hash-aggregation over the selection vector
    (filter→group-by→sum, no intermediate), deterministic key-sorted output, honest
    10M-row bench. Driven through the same validate-everything NL→query path.

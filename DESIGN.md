@@ -37,14 +37,16 @@ data/AI infrastructure (Kubernetes, Docker, vector DBs, data tooling), it ships 
 a single static binary, and it shows you build production systems, not benchmarks.
 A well-engineered columnar engine in Go is a top-tier AI-eng portfolio piece.
 
-## First honest benchmark (reproduce: `go test -bench=. -benchmem`)
+## Honest benchmarks → full write-up in [BENCHMARKS.md](BENCHMARKS.md)
 
-| Workload | Rows | Result |
-|---|---|---|
-| filter (`> 500`) → sum, single core, no SIMD | 10,000,000 | **~39 ms, 1 alloc** (≈258M rows/s) |
-
-Naive baseline, deliberately. It only goes up from here — and every claim ships
-with the command that reproduces it.
+The first benchmark falsified the obvious assumption: the textbook two-pass columnar
+path (`FilterGT`→`SumAt`, ~38 ms, 40 MB alloc) **lost** to a naive row-store scan
+(~37 ms, 0 alloc) — it materializes a full-column selection vector and walks the data
+twice. Fusing filter+sum into one pass (`SumWhereGT`) is **~6× faster (6.3 ms, 0
+alloc)**, and the disassembler shows why: the compiler predicates the contiguous-slice
+reduction into branchless `CSEL`, while the strided struct access keeps a
+mispredicting branch. Measured, not assumed — including that it's *not* SIMD and *not*
+bandwidth at this scale. Every number ships with the command that reproduces it.
 
 ## MVP scope (achievable in weeks, not a DuckDB-clone in years)
 
@@ -80,4 +82,8 @@ with the command that reproduces it.
    10M-row bench. Driven through the same validate-everything NL→query path.
 4. ✅ The embedding/vector column + semantic search (cosine top-k, native column op).
 5. ✅ Local-LLM NL→query layer (Ollama/gemma-e7, model proposes / engine disposes).
-6. Honest benchmark suite + write-up (the portfolio artifact).
+6. ✅ Honest benchmark suite + write-up ([BENCHMARKS.md](BENCHMARKS.md)) — the portfolio
+   artifact. Columnar-vs-row-store study (the two-pass path lost; fused `SumWhereGT`
+   wins ~6×), branch-vs-bandwidth experiment, disassembly evidence (`CSEL` vs `BLE`),
+   and the full operator-cost table — reporting the rows where the number went the
+   wrong way, which is the senior signal.

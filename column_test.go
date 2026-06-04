@@ -33,6 +33,24 @@ func TestSumAndSumAt(t *testing.T) {
 	}
 }
 
+// SumWhereGT is the fused one-pass form: it must equal FilterGT→SumAt exactly, never
+// approximate it. The equivalence is pinned across a random column so a mutation that
+// drops the predicate (summing everything) or sums the rejected rows goes RED.
+func TestSumWhereGT(t *testing.T) {
+	c := NewInt64Column([]int64{5, 1, 9, 3, 7})
+	if got := c.SumWhereGT(4); got != 21 { // 5 + 9 + 7
+		t.Fatalf("SumWhereGT(4) = %d, want 21", got)
+	}
+	if got := c.SumWhereGT(100); got != 0 { // nothing passes
+		t.Fatalf("SumWhereGT(100) = %d, want 0", got)
+	}
+	// Equivalence to the composable two-pass form over a larger random column.
+	big := tenMillion()
+	if fused, twoPass := big.SumWhereGT(500), big.SumAt(big.FilterGT(500)); fused != twoPass {
+		t.Fatalf("SumWhereGT(%d) = %d but FilterGT+SumAt = %d — fused path diverged", 500, fused, twoPass)
+	}
+}
+
 func tenMillion() *Int64Column {
 	r := rand.New(rand.NewSource(42))
 	data := make([]int64, 10_000_000)

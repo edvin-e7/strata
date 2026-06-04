@@ -65,6 +65,25 @@ func (c *Int64Column) SumAt(sel Selection) int64 {
 	return total
 }
 
+// SumWhereGT fuses filter and sum into a single pass: it sums the values greater than
+// threshold without ever building the selection vector. FilterGT→SumAt is the
+// composable form — the selection can feed several downstream ops — but it
+// materializes a full-column intermediate and walks the data twice. When the only
+// output is the aggregate, that intermediate is pure overhead, and the honest
+// benchmark (BENCHMARKS.md) shows it: the two-pass columnar path was *losing* to a
+// naive row-store scan precisely because the row store was fusing filter+sum in one
+// allocation-free pass. This op closes that gap on columnar's own terms. Same silent
+// int64-overflow caveat as Sum.
+func (c *Int64Column) SumWhereGT(threshold int64) int64 {
+	var total int64
+	for _, v := range c.Data {
+		if v > threshold {
+			total += v
+		}
+	}
+	return total
+}
+
 // GroupResult is one group produced by a group-by aggregate: a distinct key value
 // and the aggregate over the rows carrying that key.
 type GroupResult struct {

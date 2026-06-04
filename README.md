@@ -30,6 +30,9 @@ go test -bench=. -benchmem         # honest numbers
   pair of selection vectors — index pairs that compose straight back into the other
   ops, so no joined-row table is ever materialized — deterministic order, filter→join
   flows through. **10M-row fact ⋈ 1000-row dimension in ~76 ms**.
+- **Order-by + top-N**: a sort returns a *permutation* selection (never moves the data),
+  deterministic ties; the bounded `TopN` does top-10 of **10M rows in ~21 ms / 48 B**,
+  ~100× the full sort, and is pinned by test to equal `OrderBy()[:k]`.
 - `VectorColumn`: cosine top-k **semantic search** as a native column operation.
 - **Local NL→query**: a local LLM (Ollama/gemma-e7) proposes a validated query plan;
   the engine validates and runs it — a hallucinated column or op errors, never runs.

@@ -98,5 +98,16 @@ bandwidth at this scale. Every number ships with the command that reproduces it.
    a crash). Honest 10M-fact ⋈ 1000-dim bench (~76 ms; the cost is dominated by
    materializing the two ~10M output index vectors, not the probe). Build side is the
    right input by design — choosing it from cardinality is cost-based planning, a
-   non-goal. **Remaining MVP operator: `sort`/order-by (top-N over a selection
-   vector) — still unbuilt; the operator line above is honest about that.**
+   non-goal.
+8. ✅ Vectorized order-by + top-N (`sort.go`): the final MVP operator. A sort returns a
+   PERMUTATION — a `Selection` of row indices that, gathered, walks the column in order
+   — so it never moves or copies the data and composes (filter→order-by→`SumAt`).
+   `OrderBy` is a full `sort.Slice` with a total, deterministic comparator (value, then
+   ascending row index, so ties are reproducible in both directions despite an unstable
+   sort); `TopN` is the bounded O(m log k) form (the int64 analog of `vector.go`'s
+   `insertTopK`) and is pinned by test to equal `OrderBy()[:k]` exactly. Honest bench:
+   full `OrderBy` of 10M rows ~2.2 s / 40 MB (the permutation vector), but `TopN` k=10
+   over the same 10M is ~21 ms / 48 B — ~100× faster and effectively zero-alloc, which
+   is why TopN is the path for "top 10 by X". **With this the MVP vectorized-operator
+   set (filter, project, group-by+aggregate, sort, hash-join) is complete.** Follow-on
+   (not in this block, like join): wiring ORDER BY / LIMIT into the NL→query planner.

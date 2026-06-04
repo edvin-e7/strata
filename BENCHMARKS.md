@@ -128,6 +128,8 @@ explicit non-goals).
 | `SumWhereGT` (fused filter→sum) | 10M int64 | 6.3 ms (≈1.6B rows/s) | 0 |
 | `GroupSum` (hash group-by + sum) | 10M rows, ~1000 keys | 64.8 ms | 90 KB, 24 |
 | `HashJoinInt64` (inner equi-join) | 10M fact ⋈ 1000 dim | 75.8 ms | 80 MB, ~1k |
+| `OrderBy` (full sort, permutation) | 10M int64 | 2.22 s | 40 MB, 3 |
+| `TopN` (bounded top-10) | 10M int64, k=10 | 21.5 ms | 48 B, 1 |
 | `FilterGT`→`SumAt` (float64, two-pass) | 10M float64 | 50.8 ms | 40 MB, 1 |
 | `CountTrue` (bit-packed popcount) | 10M bits (~1.25 MB) | 69 µs | 0 |
 | `FilterEq` (dictionary-encoded string) | 10M rows, ~100 cats | 7.2 ms | 2 MB, 26 |
@@ -142,6 +144,13 @@ Notes, honestly:
 - **`GroupSum` (64.8 ms) is the slowest op**, dominated by Go map operations on ~1000
   keys (hashing + probing per row). A real engine radix-partitions or uses open
   addressing; strata uses the standard library map. Honest, and a clear next target.
+- **`OrderBy` vs `TopN` is the block-8 lesson, the same shape as the fused-filter one:**
+  the full sort costs 2.22 s and 40 MB (the 10M-element `uint32` permutation it must
+  return), but a query that only wants the first few rows ("top 10 by revenue") does
+  *not* need a full ordering. `TopN` keeps a bounded length-k selection in one pass —
+  **21.5 ms and 48 bytes**, ~100× faster and effectively zero-alloc — and is pinned by
+  test to return byte-identical rows to `OrderBy()[:k]`. The honest read: the expensive
+  artifact is the full permutation, so don't build it when you only need its prefix.
 - **`HashJoinInt64` (75.8 ms, 80 MB)** is a star-join: a 10M-row fact table joined to a
   1000-row dimension, each fact row matching one dimension row. The honest read of that
   80 MB is that it is **not** the hash table (the 1000-row build side is tiny) — it is

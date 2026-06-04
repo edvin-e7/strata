@@ -32,8 +32,8 @@ func NewOllamaPlanner() *OllamaPlanner {
 
 const plannerSystem = `You translate a question about a data table into a JSON query.
 Output ONLY a JSON object — no prose, no markdown fences.
-Schema: {"agg":"sum"|"count","column":"<the column to sum, or empty string for count>","filter":{"column":"<name>","op":">","value":<integer>} }
-Set "filter" to null when the question has no condition. Use ONLY column names from the provided schema. The operator MUST be the literal character ">" (greater-than) — never "$gt", "gt", or "<".`
+Schema: {"agg":"sum"|"count","column":"<the column to sum, or empty string for count>","group_by":"<column to group by, or empty string for none>","filter":{"column":"<name>","op":">","value":<integer>} }
+Set "filter" to null when the question has no condition. Set "group_by" to "" unless the question asks for a per-category breakdown ("by X", "per X", "for each X"). Use ONLY column names from the provided schema. The operator MUST be the literal character ">" (greater-than) — never "$gt", "gt", or "<".`
 
 type ollamaChatReq struct {
 	Model    string              `json:"model"`

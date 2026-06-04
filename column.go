@@ -9,6 +9,11 @@
 // honesty, not in a benchmark we can't win.
 package strata
 
+import (
+	"fmt"
+	"sort"
+)
+
 // Int64Column is a typed, contiguous column. Contiguous storage is the whole point
 // of a columnar engine: an operator sweeps the entire slice in one tight,
 // branch-predictable, cache-friendly loop instead of chasing row-by-row pointers.
@@ -58,4 +63,63 @@ func (c *Int64Column) SumAt(sel Selection) int64 {
 		total += c.Data[i]
 	}
 	return total
+}
+
+// GroupResult is one group produced by a group-by aggregate: a distinct key value
+// and the aggregate over the rows carrying that key.
+type GroupResult struct {
+	Key   int64 `json:"key"`
+	Value int64 `json:"value"`
+}
+
+// GroupSum groups rows by the key column and sums the value column within each group.
+// When sel is non-nil only those rows participate, so a filter→group-by→sum chain
+// flows the selection vector straight through and never materializes an intermediate.
+//
+// One hash-aggregation pass over contiguous memory — the standard columnar group-by,
+// not radix-partitioned or SIMD (honest about that, like every op here). Results are
+// sorted by key ascending: Go randomizes map iteration order, and a non-deterministic
+// engine result is a correctness bug, not a cosmetic one, so the order is pinned.
+func GroupSum(keys, values *Int64Column, sel Selection) []GroupResult {
+	if len(keys.Data) != len(values.Data) {
+		panic(fmt.Sprintf("strata: GroupSum key column has %d rows but value column has %d — must match", len(keys.Data), len(values.Data)))
+	}
+	acc := make(map[int64]int64)
+	if sel == nil {
+		for i, k := range keys.Data {
+			acc[k] += values.Data[i]
+		}
+	} else {
+		for _, i := range sel {
+			acc[keys.Data[i]] += values.Data[i]
+		}
+	}
+	return sortedGroups(acc)
+}
+
+// GroupCount groups rows by the key column and counts the rows in each group. Same
+// selection and deterministic-ordering contract as GroupSum.
+func GroupCount(keys *Int64Column, sel Selection) []GroupResult {
+	acc := make(map[int64]int64)
+	if sel == nil {
+		for _, k := range keys.Data {
+			acc[k]++
+		}
+	} else {
+		for _, i := range sel {
+			acc[keys.Data[i]]++
+		}
+	}
+	return sortedGroups(acc)
+}
+
+// sortedGroups flattens an accumulator into key-ascending order, the pin that makes
+// every grouped result deterministic and reproducible.
+func sortedGroups(acc map[int64]int64) []GroupResult {
+	out := make([]GroupResult, 0, len(acc))
+	for k, v := range acc {
+		out = append(out, GroupResult{Key: k, Value: v})
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Key < out[j].Key })
+	return out
 }

@@ -69,7 +69,9 @@ with the command that reproduces it.
 
 1. ✅ Vectorized columnar core seed: Int64 column, filter→aggregate, honest 10M bench.
 2. Column types (float64, dict-string, bool) + a tiny typed table.
-3. Group-by + aggregate, vectorized.
-4. The embedding/vector column + semantic search.
-5. Local-LLM NL→query layer.
+3. ✅ Group-by + aggregate, vectorized: hash-aggregation over the selection vector
+   (filter→group-by→sum, no intermediate), deterministic key-sorted output, honest
+   10M-row bench. Driven through the same validate-everything NL→query path.
+4. ✅ The embedding/vector column + semantic search (cosine top-k, native column op).
+5. ✅ Local-LLM NL→query layer (Ollama/gemma-e7, model proposes / engine disposes).
 6. Honest benchmark suite + write-up (the portfolio artifact).

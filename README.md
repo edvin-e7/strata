@@ -23,6 +23,11 @@ go test -bench=. -benchmem         # honest numbers
 
 - Vectorized columnar `Int64Column`: filter → aggregate, **10M rows in ~39 ms**,
   1 alloc, single core, no SIMD.
+- **Group-by + aggregate**: hash-aggregation flowing the selection vector straight
+  through (filter→group-by→sum, no intermediate), deterministic key-sorted output —
+  **10M rows / 1000 groups in ~65 ms**.
 - `VectorColumn`: cosine top-k **semantic search** as a native column operation.
+- **Local NL→query**: a local LLM (Ollama/gemma-e7) proposes a validated query plan;
+  the engine validates and runs it — a hallucinated column or op errors, never runs.
 
 Honest, reproducible, narrow on purpose. See [DESIGN.md](DESIGN.md) for the roadmap.

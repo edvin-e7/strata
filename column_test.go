@@ -43,7 +43,9 @@ func tenMillion() *Int64Column {
 }
 
 // Honest benchmark: a full filter→aggregate over 10M rows. Run with
-//   go test -bench=. -benchmem
+//
+//	go test -bench=. -benchmem
+//
 // Report the number as-is. Never dress it up as "faster than X".
 func BenchmarkFilterSumGT_10M(b *testing.B) {
 	c := tenMillion()

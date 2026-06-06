@@ -1,8 +1,7 @@
 # Strata — design & honest positioning
 
-> Private design doc + portfolio case-study seed. Posture: showable engine
-> (WHAT/WHY), footwork/stack-strategy stays dark (see Cairn's doctrine). Private,
-> no remote, until release-ready. — 2026-06-04
+> Design doc + portfolio case-study seed. Posture: showable engine (WHAT/WHY),
+> with the broader stack strategy kept as its own concern. — 2026-06-04
 
 ## What it is
 
@@ -26,7 +25,7 @@ know the field. We claim the opposite kind of thing, and we benchmark honestly.
    type; querying via a **local** LLM (Ollama / gemma-e7) is native; semantic
    search over a column sits next to `GROUP BY`. The fast engines don't have this.
 3. **Local-first / owned** — your data, your machine, your engine. Nothing leaves.
-   On-thesis with *Own Your Intelligence*.
+   No cloud dependency, no data exfiltration by design.
 
 ## Why Go (resolving the earlier "Go is wrong")
 

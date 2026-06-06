@@ -3,9 +3,9 @@
 A from-scratch, vectorized, **columnar** in-memory data engine in Go — built
 **AI-native** and **local-first**.
 
-> Posture: private/portfolio, no remote, until release-ready. The engine + honest
-> benchmarks are the showable part (WHAT/WHY); the broader stack strategy stays
-> dark. See [DESIGN.md](DESIGN.md).
+> Posture: a portfolio/case-study piece. The engine + honest benchmarks are the
+> showable part (WHAT/WHY); the broader stack strategy stays its own concern.
+> See [DESIGN.md](DESIGN.md).
 
 ## The honest pitch
 
@@ -36,5 +36,8 @@ go test -bench=. -benchmem         # honest numbers
 - `VectorColumn`: cosine top-k **semantic search** as a native column operation.
 - **Local NL→query**: a local LLM (Ollama/gemma-e7) proposes a validated query plan;
   the engine validates and runs it — a hallucinated column or op errors, never runs.
+  *Optional layer* — the core engine is pure stdlib (zero third-party deps); the
+  NL→query path only needs a local Ollama with `gemma-e7` (setup + golden path in
+  [CLAUDE.md](CLAUDE.md); the live tests skip cleanly when Ollama is down).
 
 Honest, reproducible, narrow on purpose. See [DESIGN.md](DESIGN.md) for the roadmap.

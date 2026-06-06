@@ -5,11 +5,10 @@ A from-scratch, vectorized, **columnar** in-memory data engine in Go — built
 clone. Read `README.md`, `DESIGN.md`, and `BENCHMARKS.md` first — they carry the
 honest positioning and the reproducible numbers.
 
-## Posture (Cairn doctrine — read before any public mention)
-Private/portfolio. The engine + **honest** benchmarks are the showable part
-(WHAT/WHY); the broader stack strategy stays dark. **Sell the vision, not the
-footwork.** Has an `origin` remote but treat as no-push by default — do NOT push
-unless Edvin explicitly says so.
+## Posture
+Public portfolio / case-study piece. The engine + **honest**, reproducible
+benchmarks are the point — numbers you can re-run beat marketing. Keep the
+README/DESIGN positioning showable and accurate; don't oversell.
 
 ## Stack
 - **Go 1.25.5**, module `strata`. Single flat package `strata` at repo root.

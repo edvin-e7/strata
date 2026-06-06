@@ -1,2 +1,7 @@
 bin/
 *.out
+
+# Go scratch / build artifacts
+*.test
+*.prof
+coverage.out
